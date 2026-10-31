@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_brightloop_subscription_plan_list" model="ir.ui.view">
+        <field name="name">brightloop.subscription.plan.list</field>
+        <field name="model">brightloop.subscription.plan</field>
+        <field name="arch" type="xml">
+            <tree string="Subscription Plans">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="billing_count"/>
+                <field name="billing_interval"/>
+                <field name="minimum_quantity"/>
+                <field name="start_date"/>
+                <field name="end_date"/>
+                <field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+    <record id="view_brightloop_subscription_plan_form" model="ir.ui.view">
+        <field name="name">brightloop.subscription.plan.form</field>
+        <field name="model">brightloop.subscription.plan</field>
+        <field name="arch" type="xml">
+            <form string="Subscription Plan">
+                <sheet>
+                    <div class="oe_title"><label for="name"/><h1><field name="name" placeholder="e.g. Business Monthly"/></h1></div>
+                    <group>
+                        <group string="Billing">
+                            <field name="billing_count"/>
+                            <field name="billing_interval"/>
+                            <field name="minimum_quantity"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                        <group string="Availability and lifecycle">
+                            <field name="start_date"/>
+                            <field name="end_date"/>
+                            <field name="auto_close"/>
+                            <field name="allow_pause"/>
+                            <field name="allow_early_close"/>
+                            <field name="allow_renewal"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <notebook><page string="Description"><field name="description"/></page></notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_brightloop_plans" model="ir.actions.act_window">
+        <field name="name">Plans</field>
+        <field name="res_model">brightloop.subscription.plan</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_brightloop_discount_list" model="ir.ui.view">
+        <field name="name">brightloop.subscription.discount.list</field>
+        <field name="model">brightloop.subscription.discount</field>
+        <field name="arch" type="xml">
+            <tree string="Discount Rules">
+                <field name="name"/><field name="discount_type"/><field name="value"/>
+                <field name="applies_to"/><field name="start_date"/><field name="end_date"/>
+                <field name="used_count"/><field name="usage_limit"/><field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+    <record id="view_brightloop_discount_form" model="ir.ui.view">
+        <field name="name">brightloop.subscription.discount.form</field>
+        <field name="model">brightloop.subscription.discount</field>
+        <field name="arch" type="xml">
+            <form string="Discount Rule">
+                <sheet>
+                    <div class="oe_title"><label for="name"/><h1><field name="name"/></h1></div>
+                    <group>
+                        <group><field name="discount_type"/><field name="value"/><field name="applies_to"/><field name="product_ids" widget="many2many_tags" invisible="applies_to != 'products'"/></group>
+                        <group><field name="minimum_amount"/><field name="currency_id"/><field name="minimum_quantity"/><field name="start_date"/><field name="end_date"/><field name="usage_limit"/><field name="used_count" readonly="1"/><field name="active"/></group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_brightloop_discounts" model="ir.actions.act_window">
+        <field name="name">Discount Rules</field><field name="res_model">brightloop.subscription.discount</field><field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_brightloop_subscription_search" model="ir.ui.view">
+        <field name="name">brightloop.subscription.search</field><field name="model">brightloop.subscription</field>
+        <field name="arch" type="xml">
+            <search string="Subscriptions">
+                <field name="name"/><field name="partner_id"/><field name="plan_id"/><field name="user_id"/>
+                <filter name="active" string="Active" domain="[('state', '=', 'active')]"/>
+                <filter name="due" string="Outstanding" domain="[('invoice_status', '=', 'due')]"/>
+                <filter name="overdue" string="Overdue" domain="[('invoice_status', '=', 'overdue')]"/>
+                <separator/><filter name="closed" string="Closed" domain="[('state', '=', 'closed')]"/>
+                <group expand="0" string="Group By"><filter name="by_plan" string="Plan" context="{'group_by': 'plan_id'}"/><filter name="by_state" string="Status" context="{'group_by': 'state'}"/><filter name="by_salesperson" string="Salesperson" context="{'group_by': 'user_id'}"/></group>
+            </search>
+        </field>
+    </record>
+    <record id="view_brightloop_subscription_list" model="ir.ui.view">
+        <field name="name">brightloop.subscription.list</field><field name="model">brightloop.subscription</field>
+        <field name="arch" type="xml">
+            <tree string="Subscriptions" decoration-danger="invoice_status == 'overdue'" decoration-muted="state == 'closed'">
+                <field name="name"/><field name="partner_id"/><field name="plan_id"/><field name="start_date"/>
+                <field name="end_date"/><field name="next_invoice_date"/><field name="amount_total" sum="Total"/>
+                <field name="amount_due" sum="Outstanding"/><field name="invoice_status" widget="badge"/>
+                <field name="state" widget="badge"/>
+            </tree>
+        </field>
+    </record>
+    <record id="view_brightloop_subscription_form" model="ir.ui.view">
+        <field name="name">brightloop.subscription.form</field><field name="model">brightloop.subscription</field>
+        <field name="arch" type="xml">
+            <form string="Subscription">
+                <header>
+                    <button name="action_to_quotation" type="object" string="Create Quotation" class="btn-secondary" invisible="state != 'draft'"/>
+                    <button name="action_confirm" type="object" string="Confirm" class="btn-primary" invisible="state not in ('draft', 'quotation')"/>
+                    <button name="action_activate" type="object" string="Activate" class="btn-primary" invisible="state != 'confirmed'"/>
+                    <button name="action_generate_invoice" type="object" string="Invoice Now" class="btn-primary" invisible="state not in ('confirmed', 'active')"/>
+                    <button name="action_pause" type="object" string="Pause" invisible="state != 'active'"/>
+                    <button name="action_resume" type="object" string="Resume" invisible="state != 'paused'"/>
+                    <button name="action_renew" type="object" string="Renew" invisible="state != 'closed'"/>
+                    <button name="action_close" type="object" string="Close" class="btn-secondary" invisible="state in ('closed', 'draft')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,quotation,confirmed,active,closed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title"><label for="name"/><h1><field name="name"/></h1></div>
+                    <group>
+                        <group string="Customer and plan"><field name="partner_id"/><field name="plan_id"/><field name="quotation_template_id"/><field name="quotation_validity_days" invisible="not quotation_template_id"/><field name="quotation_valid_until" invisible="not quotation_template_id"/><field name="user_id"/><field name="payment_term_id"/></group>
+                        <group string="Schedule"><field name="start_date"/><field name="end_date"/><field name="next_invoice_date"/><field name="discount_id"/></group>
+                    </group>
+                    <notebook>
+                        <page string="Products"><field name="line_ids"><tree editable="bottom"><field name="product_id"/><field name="name" optional="hide"/><field name="quantity"/><field name="price_unit"/><field name="tax_ids" widget="many2many_tags"/><field name="price_subtotal" sum="Subtotal"/><field name="price_tax" sum="Tax"/><field name="price_total" sum="Total"/></tree></field>
+                            <group class="oe_subtotal_footer oe_right"><field name="amount_untaxed"/><field name="amount_tax"/><field name="amount_total" class="oe_subtotal_footer_separator"/></group>
+                        </page>
+                        <page string="Billing"><group><field name="invoice_status"/><field name="invoice_count"/><field name="amount_paid"/><field name="amount_due"/></group><field name="invoice_ids" readonly="1"><tree><field name="name"/><field name="invoice_date"/><field name="invoice_date_due"/><field name="amount_total"/><field name="amount_residual"/><field name="payment_state" widget="badge"/><field name="state"/></tree></field></page>
+                        <page string="Notes"><field name="notes"/></page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+    <record id="action_brightloop_subscriptions" model="ir.actions.act_window">
+        <field name="name">Subscriptions</field><field name="res_model">brightloop.subscription</field>
+        <field name="view_mode">tree,form</field><field name="search_view_id" ref="view_brightloop_subscription_search"/>
+    </record>
+
+    <record id="view_brightloop_payment_list" model="ir.ui.view">
+        <field name="name">brightloop.subscription.payment.list</field><field name="model">brightloop.subscription.payment</field>
+        <field name="arch" type="xml"><tree string="Recorded Payments"><field name="payment_date"/><field name="name"/><field name="partner_id"/><field name="subscription_id"/><field name="invoice_id"/><field name="payment_method"/><field name="amount" sum="Total"/><field name="note"/></tree></field>
+    </record>
+    <record id="view_brightloop_payment_form" model="ir.ui.view">
+        <field name="name">brightloop.subscription.payment.form</field><field name="model">brightloop.subscription.payment</field>
+        <field name="arch" type="xml"><form string="Record Payment"><sheet><group><field name="name"/><field name="invoice_id"/><field name="partner_id"/><field name="subscription_id"/><field name="payment_date"/><field name="payment_method"/><field name="amount"/><field name="note"/></group></sheet></form></field>
+    </record>
+    <record id="action_brightloop_payments" model="ir.actions.act_window">
+        <field name="name">Payments</field><field name="res_model">brightloop.subscription.payment</field><field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_move_form_brightloop_subscription" model="ir.ui.view">
+        <field name="name">account.move.form.brightloop.subscription</field><field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_move_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Subscription Billing" invisible="not brightloop_subscription_id">
+                    <group><field name="brightloop_subscription_id"/><field name="brightloop_period_start"/><field name="brightloop_period_end"/><field name="brightloop_paid_amount"/></group>
+                    <field name="brightloop_payment_ids"><tree editable="bottom"><field name="payment_date"/><field name="payment_method"/><field name="amount"/><field name="note"/></tree></field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <menuitem id="menu_brightloop_root" name="Subscriptions" sequence="40" groups="subscription_management.group_brightloop_staff,subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_dashboard" name="Overview" parent="menu_brightloop_root" action="action_brightloop_subscriptions" sequence="1" groups="subscription_management.group_brightloop_staff,subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_subscriptions" name="Subscriptions" parent="menu_brightloop_root" action="action_brightloop_subscriptions" sequence="5" groups="subscription_management.group_brightloop_staff,subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_plans" name="Plans" parent="menu_brightloop_root" action="action_brightloop_plans" sequence="10" groups="subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_discounts" name="Discount Rules" parent="menu_brightloop_root" action="action_brightloop_discounts" sequence="15" groups="subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_payments" name="Payments" parent="menu_brightloop_root" action="action_brightloop_payments" sequence="20" groups="subscription_management.group_brightloop_staff,subscription_management.group_brightloop_manager"/>
+</odoo>
+
