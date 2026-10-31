@@ -99,10 +99,28 @@
         <field name="arch" type="xml">
             <tree string="Subscriptions" decoration-danger="invoice_status == 'overdue'" decoration-muted="state == 'closed'">
                 <field name="name"/><field name="partner_id"/><field name="plan_id"/><field name="start_date"/>
-                <field name="end_date"/><field name="next_invoice_date"/><field name="amount_total" sum="Total"/>
-                <field name="amount_due" sum="Outstanding"/><field name="invoice_status" widget="badge"/>
+                <field name="end_date"/><field name="next_invoice_date"/><field name="amount_total" sum="Recurring total"/>
+                <field name="amount_paid" sum="Collected"/><field name="amount_due" sum="Outstanding"/><field name="invoice_status" widget="badge"/>
                 <field name="state" widget="badge"/>
             </tree>
+        </field>
+    </record>
+    <record id="view_brightloop_subscription_graph" model="ir.ui.view">
+        <field name="name">brightloop.subscription.graph</field><field name="model">brightloop.subscription</field>
+        <field name="arch" type="xml">
+            <graph string="Subscription Revenue and Collections" type="bar">
+                <field name="start_date" interval="month"/>
+                <field name="amount_paid" type="measure"/><field name="amount_due" type="measure"/>
+            </graph>
+        </field>
+    </record>
+    <record id="view_brightloop_subscription_pivot" model="ir.ui.view">
+        <field name="name">brightloop.subscription.pivot</field><field name="model">brightloop.subscription</field>
+        <field name="arch" type="xml">
+            <pivot string="Subscription Revenue and Collections">
+                <field name="plan_id" type="row"/><field name="state" type="col"/>
+                <field name="amount_paid" type="measure"/><field name="amount_due" type="measure"/>
+            </pivot>
         </field>
     </record>
     <record id="view_brightloop_subscription_form" model="ir.ui.view">
@@ -111,7 +129,7 @@
             <form string="Subscription">
                 <header>
                     <button name="action_to_quotation" type="object" string="Create Quotation" class="btn-secondary" invisible="state != 'draft'"/>
-                    <button name="action_confirm" type="object" string="Confirm" class="btn-primary" invisible="state not in ('draft', 'quotation')"/>
+                    <button name="action_confirm" type="object" string="Confirm" class="btn-primary" invisible="state != 'quotation'"/>
                     <button name="action_activate" type="object" string="Activate" class="btn-primary" invisible="state != 'confirmed'"/>
                     <button name="action_generate_invoice" type="object" string="Invoice Now" class="btn-primary" invisible="state not in ('confirmed', 'active')"/>
                     <button name="action_pause" type="object" string="Pause" invisible="state != 'active'"/>
@@ -123,7 +141,7 @@
                 <sheet>
                     <div class="oe_title"><label for="name"/><h1><field name="name"/></h1></div>
                     <group>
-                        <group string="Customer and plan"><field name="partner_id"/><field name="plan_id"/><field name="quotation_template_id"/><field name="quotation_validity_days" invisible="not quotation_template_id"/><field name="quotation_valid_until" invisible="not quotation_template_id"/><field name="user_id"/><field name="payment_term_id"/></group>
+                        <group string="Customer and plan"><field name="partner_id"/><field name="plan_id"/><field name="quotation_template_id"/><field name="quotation_date" invisible="state == 'draft'"/><field name="quotation_validity_days" invisible="not quotation_template_id"/><field name="quotation_valid_until" invisible="not quotation_template_id"/><field name="user_id"/><field name="payment_term_id"/></group>
                         <group string="Schedule"><field name="start_date"/><field name="end_date"/><field name="next_invoice_date"/><field name="discount_id"/></group>
                     </group>
                     <notebook>
@@ -140,7 +158,7 @@
     </record>
     <record id="action_brightloop_subscriptions" model="ir.actions.act_window">
         <field name="name">Subscriptions</field><field name="res_model">brightloop.subscription</field>
-        <field name="view_mode">tree,form</field><field name="search_view_id" ref="view_brightloop_subscription_search"/>
+        <field name="view_mode">tree,form,graph,pivot</field><field name="search_view_id" ref="view_brightloop_subscription_search"/>
     </record>
 
     <record id="view_brightloop_payment_list" model="ir.ui.view">
@@ -174,5 +192,6 @@
     <menuitem id="menu_brightloop_plans" name="Plans" parent="menu_brightloop_root" action="action_brightloop_plans" sequence="10" groups="subscription_management.group_brightloop_manager"/>
     <menuitem id="menu_brightloop_discounts" name="Discount Rules" parent="menu_brightloop_root" action="action_brightloop_discounts" sequence="15" groups="subscription_management.group_brightloop_manager"/>
     <menuitem id="menu_brightloop_payments" name="Payments" parent="menu_brightloop_root" action="action_brightloop_payments" sequence="20" groups="subscription_management.group_brightloop_staff,subscription_management.group_brightloop_manager"/>
+    <menuitem id="menu_brightloop_staff" name="Invite Staff" parent="menu_brightloop_root" action="action_brightloop_staff_invite" sequence="25" groups="subscription_management.group_brightloop_manager"/>
 </odoo>
 

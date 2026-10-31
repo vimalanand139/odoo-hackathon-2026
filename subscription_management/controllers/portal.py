@@ -6,7 +6,7 @@ from odoo.addons.portal.controllers.portal import CustomerPortal, pager
 class BrightloopPortal(CustomerPortal):
     @http.route(["/my/subscriptions", "/my/subscriptions/page/<int:page>"], type="http", auth="user", website=True)
     def portal_subscriptions(self, page=1, **kwargs):
-        domain = [("partner_id", "=", request.env.user.partner_id.commercial_partner_id.id)]
+        domain = [("partner_id", "child_of", request.env.user.partner_id.commercial_partner_id.id)]
         model = request.env["brightloop.subscription"].with_user(request.env.user)
         total = model.search_count(domain)
         pager_data = pager(url="/my/subscriptions", total=total, page=page, step=20)

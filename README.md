@@ -7,7 +7,7 @@ An Odoo 17 addon for the Brightloop Software subscription workflow in the hackat
 1. Copy `subscription_management/` into an Odoo 17 addons path.
 2. Restart Odoo and update the Apps list.
 3. Install **Brightloop Subscription Management**.
-4. Assign **Subscription Staff** or **Subscription Administrator** under Settings → Users. Only administrators can edit plans and discounts; Odoo's own user administration controls who can add staff.
+4. Assign **Subscription Administrator** to the account owner under Settings → Users. Administrators can invite staff from Subscriptions → Invite Staff; the invited person receives a password setup link and is assigned the limited **Subscription Staff** role.
 5. Configure products, sale taxes, and payment terms in the standard Odoo apps. Product attribute values and their extra prices use Odoo's standard product variant feature.
 
 The addon uses Odoo's normal account invoices and payment terms. A daily scheduled action generates one invoice for each subscription that is due and advances its next billing date. The same invoice-period key is checked before creation to avoid duplicate bills. Expired plans can close subscriptions automatically. Staff can also use **Invoice Now** on a confirmed or active subscription.

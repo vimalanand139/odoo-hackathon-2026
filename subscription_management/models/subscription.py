@@ -28,17 +28,6 @@ class SubscriptionPlan(models.Model):
     allow_renewal = fields.Boolean(default=True)
     company_id = fields.Many2one("res.company", required=True, default=lambda self: self.env.company)
     currency_id = fields.Many2one(related="company_id.currency_id", store=True)
-    subscription_count = fields.Integer(compute="_compute_subscription_count")
-
-    @api.depends("name")
-    def _compute_subscription_count(self):
-        counts = self.env["brightloop.subscription"]._read_group(
-            [("plan_id", "in", self.ids)], ["plan_id"], ["__count"]
-        )
-        mapped = {plan.id: count for plan, count in counts}
-        for plan in self:
-            plan.subscription_count = mapped.get(plan.id, 0)
-
     @api.constrains("billing_count", "minimum_quantity", "start_date", "end_date")
     def _check_plan_values(self):
         for plan in self:
@@ -108,6 +97,7 @@ class Subscription(models.Model):
     currency_id = fields.Many2one(related="company_id.currency_id", store=True)
     payment_term_id = fields.Many2one("account.payment.term")
     quotation_template_id = fields.Many2one("sale.order.template", string="Quotation Template")
+    quotation_date = fields.Date()
     quotation_validity_days = fields.Integer(default=30)
     quotation_valid_until = fields.Date(compute="_compute_quotation_valid_until")
     start_date = fields.Date(required=True, default=fields.Date.context_today, tracking=True)
@@ -124,9 +114,9 @@ class Subscription(models.Model):
     amount_untaxed = fields.Monetary(compute="_compute_amounts", store=True, currency_field="currency_id")
     amount_tax = fields.Monetary(compute="_compute_amounts", store=True, currency_field="currency_id")
     amount_total = fields.Monetary(compute="_compute_amounts", store=True, currency_field="currency_id")
-    amount_paid = fields.Monetary(compute="_compute_collection", currency_field="currency_id")
-    amount_due = fields.Monetary(compute="_compute_collection", currency_field="currency_id")
-    invoice_count = fields.Integer(compute="_compute_collection")
+    amount_paid = fields.Monetary(compute="_compute_collection", store=True, currency_field="currency_id")
+    amount_due = fields.Monetary(compute="_compute_collection", store=True, currency_field="currency_id")
+    invoice_count = fields.Integer(compute="_compute_collection", store=True)
     invoice_status = fields.Selection(
         [("none", "No invoices"), ("paid", "Paid"), ("due", "Outstanding"), ("overdue", "Overdue")],
         compute="_compute_collection", store=True,
@@ -147,47 +137,53 @@ class Subscription(models.Model):
             subscription.amount_tax = sum(subscription.line_ids.mapped("price_tax"))
             subscription.amount_total = sum(subscription.line_ids.mapped("price_total"))
 
-    @api.depends("start_date", "quotation_validity_days")
+    @api.depends("quotation_date", "quotation_validity_days")
     def _compute_quotation_valid_until(self):
         for subscription in self:
-            subscription.quotation_valid_until = subscription.start_date + relativedelta(days=subscription.quotation_validity_days) if subscription.start_date else False
+            subscription.quotation_valid_until = subscription.quotation_date + relativedelta(days=subscription.quotation_validity_days) if subscription.quotation_date else False
 
     @api.onchange("quotation_template_id")
     def _onchange_quotation_template_id(self):
         for subscription in self:
             if not subscription.quotation_template_id:
                 continue
+            if subscription.quotation_template_id.number_of_days:
+                subscription.quotation_validity_days = subscription.quotation_template_id.number_of_days
             commands = [(5, 0, 0)]
             for template_line in subscription.quotation_template_id.sale_order_template_line_ids:
+                if not template_line.product_id:
+                    continue
                 commands.append((0, 0, {
                     "product_id": template_line.product_id.id,
                     "name": template_line.name,
                     "quantity": template_line.product_uom_qty,
-                    "price_unit": template_line.price_unit,
-                    "tax_ids": [(6, 0, template_line.tax_id.ids)],
+                    "price_unit": template_line.product_id.lst_price,
+                    "tax_ids": [(6, 0, template_line.product_id.taxes_id.filtered(lambda tax: tax.company_id == subscription.company_id).ids)],
                 }))
             subscription.line_ids = commands
 
-    @api.depends("invoice_ids.payment_state", "invoice_ids.invoice_date_due", "invoice_ids.amount_residual", "invoice_ids.brightloop_payment_ids.amount")
+    @api.depends("invoice_ids.state", "invoice_ids.payment_state", "invoice_ids.invoice_date_due", "invoice_ids.amount_total", "invoice_ids.amount_residual", "invoice_ids.brightloop_payment_ids.amount")
     def _compute_collection(self):
         today = fields.Date.context_today(self)
         for subscription in self:
             invoices = subscription.invoice_ids.filtered(lambda move: move.state == "posted")
             subscription.invoice_count = len(invoices)
-            subscription.amount_paid = sum(invoices.mapped("brightloop_paid_amount"))
-            subscription.amount_due = sum(max(move.amount_residual - move.brightloop_paid_amount, 0.0) for move in invoices)
+            subscription.amount_paid = sum(max(move.amount_total - move.amount_residual, 0.0) for move in invoices)
+            subscription.amount_due = sum(invoices.mapped("amount_residual"))
             if not invoices:
                 subscription.invoice_status = "none"
-            elif any(move.invoice_date_due and move.invoice_date_due < today and move.amount_residual - move.brightloop_paid_amount > 0 for move in invoices):
+            elif any(move.invoice_date_due and move.invoice_date_due < today and move.amount_residual > 0 for move in invoices):
                 subscription.invoice_status = "overdue"
             elif subscription.amount_due > 0:
                 subscription.invoice_status = "due"
             else:
                 subscription.invoice_status = "paid"
 
-    @api.constrains("start_date", "end_date", "plan_id", "line_ids")
+    @api.constrains("start_date", "end_date", "plan_id", "line_ids", "quotation_validity_days")
     def _check_dates_and_quantity(self):
         for subscription in self:
+            if subscription.quotation_validity_days < 1:
+                raise ValidationError(_("Quotation validity must be at least one day."))
             if subscription.end_date and subscription.end_date < subscription.start_date:
                 raise ValidationError(_("The expiry date must be on or after the start date."))
             quantity = sum(subscription.line_ids.mapped("quantity"))
@@ -195,17 +191,22 @@ class Subscription(models.Model):
                 raise ValidationError(_("This plan requires a minimum quantity of %s.") % subscription.plan_id.minimum_quantity)
 
     def action_to_quotation(self):
-        self.write({"state": "quotation"})
+        self.write({"state": "quotation", "quotation_date": fields.Date.context_today(self)})
 
     def action_confirm(self):
         for subscription in self:
             if not subscription.line_ids:
                 raise UserError(_("Add at least one product before confirming the subscription."))
+            quantity = sum(subscription.line_ids.mapped("quantity"))
+            if quantity < subscription.plan_id.minimum_quantity:
+                raise UserError(_("This plan requires a minimum quantity of %s.") % subscription.plan_id.minimum_quantity)
             if subscription.plan_id.start_date and subscription.start_date < subscription.plan_id.start_date:
                 raise UserError(_("This plan is not available yet."))
             if subscription.plan_id.end_date and subscription.start_date > subscription.plan_id.end_date:
                 raise UserError(_("This plan is no longer available."))
-            if subscription.state == "quotation" and subscription.quotation_valid_until < fields.Date.context_today(self):
+            if subscription.state != "quotation":
+                raise UserError(_("Move the subscription to Quotation before confirming it."))
+            if subscription.quotation_valid_until and subscription.quotation_valid_until < fields.Date.context_today(self):
                 raise UserError(_("This quotation has expired. Update its start date or create a new quotation."))
             subscription.write({"state": "confirmed", "next_invoice_date": subscription.start_date})
 
@@ -235,7 +236,7 @@ class Subscription(models.Model):
             renewed |= subscription.copy({"name": "New", "state": "draft", "start_date": subscription.end_date or fields.Date.context_today(self), "end_date": False, "next_invoice_date": False})
         return {
             "type": "ir.actions.act_window", "name": _("Renewed Subscriptions"),
-            "res_model": self._name, "view_mode": "list,form", "domain": [("id", "in", renewed.ids)],
+            "res_model": self._name, "view_mode": "tree,form", "domain": [("id", "in", renewed.ids)],
         }
 
     def _advance_date(self, date_value):
@@ -254,6 +255,9 @@ class Subscription(models.Model):
             period_end = subscription._advance_date(period_start)
             if subscription.end_date:
                 period_end = min(period_end, subscription.end_date)
+            # Serialize invoice creation for this period across cron and manual actions.
+            self.env.cr.execute("SELECT id FROM brightloop_subscription WHERE id = %s FOR UPDATE", [subscription.id])
+            subscription.invalidate_recordset(["invoice_ids"])
             if self.env["account.move"].search_count([
                 ("brightloop_subscription_id", "=", subscription.id),
                 ("brightloop_period_start", "=", period_start),
@@ -261,6 +265,18 @@ class Subscription(models.Model):
             ]):
                 subscription.next_invoice_date = period_end
                 continue
+            discount = subscription.discount_id
+            eligible_lines = self.env["brightloop.subscription.line"]
+            discount_rate = 0.0
+            if discount:
+                self.env.cr.execute("SELECT id FROM brightloop_subscription_discount WHERE id = %s FOR UPDATE", [discount.id])
+                discount.invalidate_recordset(["used_count"])
+            if discount and discount.is_available(period_start):
+                if subscription.amount_untaxed >= discount.minimum_amount and sum(subscription.line_ids.mapped("quantity")) >= discount.minimum_quantity:
+                    eligible_lines = subscription.line_ids.filtered(lambda line: discount.applies_to == "subscription" or line.product_id in discount.product_ids)
+                    eligible_amount = sum(eligible_lines.mapped("price_subtotal"))
+                    if eligible_amount:
+                        discount_rate = discount.value if discount.discount_type == "percent" else min(discount.value, eligible_amount) / eligible_amount * 100
             invoice_lines = []
             for line in subscription.line_ids:
                 invoice_lines.append((0, 0, {
@@ -268,20 +284,11 @@ class Subscription(models.Model):
                     "name": line.name or line.product_id.display_name,
                     "quantity": line.quantity,
                     "price_unit": line.price_unit,
+                    "discount": discount_rate if line in eligible_lines else 0.0,
                     "tax_ids": [(6, 0, line.tax_ids.ids)],
                 }))
-            if subscription.discount_id and subscription.discount_id.is_available(period_start):
-                discount = subscription.discount_id
-                if subscription.amount_untaxed >= discount.minimum_amount and sum(subscription.line_ids.mapped("quantity")) >= discount.minimum_quantity:
-                    eligible = subscription.line_ids.filtered(lambda line: discount.applies_to == "subscription" or line.product_id in discount.product_ids)
-                    eligible_amount = sum(eligible.mapped("price_subtotal"))
-                    if discount.discount_type == "percent":
-                        discount_amount = eligible_amount * discount.value / 100
-                    else:
-                        discount_amount = min(discount.value, eligible_amount)
-                    if discount_amount:
-                        invoice_lines.append((0, 0, {"name": _("Discount: %s") % discount.name, "quantity": 1, "price_unit": -discount_amount, "tax_ids": []}))
-                        discount.used_count += 1
+            if discount_rate and discount:
+                discount.used_count += 1
             invoice = self.env["account.move"].create({
                 "move_type": "out_invoice", "partner_id": subscription.partner_id.id,
                 "invoice_date": period_start,

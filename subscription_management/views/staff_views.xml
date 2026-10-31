@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_brightloop_staff_invite_form" model="ir.ui.view">
+        <field name="name">brightloop.staff.invite.form</field>
+        <field name="model">brightloop.staff.invite</field>
+        <field name="arch" type="xml">
+            <form string="Invite Subscription Staff">
+                <group>
+                    <field name="name"/>
+                    <field name="email"/>
+                </group>
+                <footer>
+                    <button name="action_invite" type="object" string="Create Account and Send Reset Link" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="action_brightloop_staff_invite" model="ir.actions.act_window">
+        <field name="name">Invite Subscription Staff</field>
+        <field name="res_model">brightloop.staff.invite</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
+

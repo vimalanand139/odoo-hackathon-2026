@@ -10,6 +10,7 @@
         "security/ir.model.access.csv",
         "data/ir_sequence.xml",
         "data/ir_cron.xml",
+        "views/staff_views.xml",
         "views/subscription_views.xml",
         "views/portal_templates.xml",
     ],

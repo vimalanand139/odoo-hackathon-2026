@@ -11,4 +11,5 @@ access_payment_staff,subscription payment staff,model_brightloop_subscription_pa
 access_payment_manager,subscription payment manager,model_brightloop_subscription_payment,subscription_management.group_brightloop_manager,1,1,1,1
 access_subscription_portal,subscription portal,model_brightloop_subscription,base.group_portal,1,0,0,0
 access_line_portal,subscription line portal,model_brightloop_subscription_line,base.group_portal,1,0,0,0
+access_staff_invite_manager,subscription staff invite manager,model_brightloop_staff_invite,subscription_management.group_brightloop_manager,1,1,1,1
 
